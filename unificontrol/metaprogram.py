@@ -74,7 +74,8 @@ class _UnifiAPICall:
     def _build_url(self, client, path_arg):
         if not client.site:
             raise UnifiAPIError("No site specified for site-specific call")
-        return "https://{host}:{port}/api/s/{site}/{endpoint}{path}".format(
+#        return "https://{host}:{port}/api/s/{site}/{endpoint}{path}".format(
+        return "https://{host}:{port}/proxy/network/api/s/{site}/{endpoint}{path}".format(
             host=client.host, port=client.port, site=client.site,
             endpoint=self._endpoint,
             path="/" + path_arg if path_arg else "")
@@ -106,7 +107,9 @@ class _UnifiAPICallNoSite(_UnifiAPICall):
     # pylint: disable=too-few-public-methods
     "A representation of a single API call common to all sites"
     def _build_url(self, client, path_arg):
-        endpoint= self._endpoint if self._endpoint.startswith('/') else '/api/' + self._endpoint
+#        endpoint= self._endpoint if self._endpoint.startswith('/') else '/api/' + self._endpoint
+        endpoint= '/api/' + self._endpoint if self._endpoint.startswith('auth') else '/proxy/network/api/' + self._endpoint        
+
         return "https://{host}:{port}{endpoint}{path}".format(
             host=client.host, port=client.port,
             endpoint=endpoint,

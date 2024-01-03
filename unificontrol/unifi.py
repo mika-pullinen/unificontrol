@@ -110,7 +110,10 @@ class UnifiClient(metaclass=MetaNameFixer):
             response = resp.json()
             if 'meta' in response and response['meta']['rc'] != 'ok':
                 raise UnifiAPIError(response['meta']['msg'])
-            return response['data']
+            if 'data' in response:
+                return response['data']
+            else:
+                return response
         else:
             raise UnifiTransportError("{}: {}".format(resp.status_code, resp.reason))
 
@@ -138,7 +141,7 @@ class UnifiClient(metaclass=MetaNameFixer):
 
     _login = UnifiAPICallNoSite(
         "raw login command",
-        "login",
+        "auth/login",
         json_args=["username", "password"],
         need_login=False)
 
