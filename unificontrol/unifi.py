@@ -81,6 +81,7 @@ class UnifiClient(metaclass=MetaNameFixer):
         self._site = site
         self._session = requests.session()
         self._exit_handler = None
+        self._csrftoken = None
 
         if cert == FETCH_CERT:
             cert = ssl.get_server_certificate((host, port))
@@ -90,11 +91,18 @@ class UnifiClient(metaclass=MetaNameFixer):
             self._session.mount("https://{}:{}".format(host, port), adaptor)
 
     def _execute(self, url, method, rest_dict, need_login=True):
-        request = requests.Request(method, url, json=rest_dict)
-        ses = self._session
+        if method == 'POST':
+            request = requests.Request(method, url, json=rest_dict, headers={'x-csrf-token': self._csrftoken})
+        else:
+            request = requests.Request(method, url, json=rest_dict)
 
+        ses = self._session
         resp = ses.send(ses.prepare_request(request))
 
+        # Save CSRF token
+        if 'x-csrf-token' in resp.headers:
+            self._csrftoken = resp.headers['x-csrf-token']
+        
         # If we fail with unauthorised and need login then retry just once
         if resp.status_code == 401 and need_login:
             try:
@@ -952,7 +960,7 @@ class UnifiClient(metaclass=MetaNameFixer):
 
     adopt_device = UnifiAPICall(
         "Adopt a device to the selected site",
-        "cmd/devmgr",
+        "cmd/devmgr/adopt",
         rest_command="adopt",
         json_args=['mac'],
         )
