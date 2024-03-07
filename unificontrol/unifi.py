@@ -81,6 +81,7 @@ class UnifiClient(metaclass=MetaNameFixer):
         self._site = site
         self._session = requests.session()
         self._exit_handler = None
+        self._unifios = False
         self._csrftoken = None
 
         if cert == FETCH_CERT:
@@ -88,10 +89,30 @@ class UnifiClient(metaclass=MetaNameFixer):
 
         if cert is not None:
             adaptor = PinningHTTPSAdapter(cert)
-            self._session.mount("https://{}:{}".format(host, port), adaptor)
+            
+
+        # Identify if this is UnifiOS or other type of controller by requesting the baseurl and checking the return code
+        url = f"https://{host}:{port}"
+        
+        request = requests.Request('GET', url)
+        session = self._session
+        response = session.send(session.prepare_request(request))
+
+        if response.status_code == 302 and response.headers['location'] == '/manage':
+            self._unifios = False
+        else if (response.status_code == 200):
+            self._unifios = True
+            if 'x-csrf-token' in resp.headers:
+                self._csrftoken = resp.headers['x-csrf-token']
+        else:
+            if 'meta' in response and msg' in response['meta']:
+                raise UnifiLoginError(f"Cannot determine if the controller is UnifiOS or not. Controller error: {response['meta']['msg']}")
+            else:
+                raise UnifiLoginError(f"Cannot determine if the controller is UnifiOS or not.")
+
 
     def _execute(self, url, method, rest_dict, need_login=True):
-        if method == 'POST':
+        if method == 'POST' or method == 'PUT':
             request = requests.Request(method, url, json=rest_dict, headers={'x-csrf-token': self._csrftoken})
         else:
             request = requests.Request(method, url, json=rest_dict)
@@ -114,8 +135,9 @@ class UnifiClient(metaclass=MetaNameFixer):
                     raise UnifiLoginError("Need user name and password to log in")
             resp = ses.send(ses.prepare_request(request))
 
+        response = resp.json()
+
         if resp.ok:
-            response = resp.json()
             if 'meta' in response and response['meta']['rc'] != 'ok':
                 raise UnifiAPIError(response['meta']['msg'])
             if 'data' in response:
@@ -123,7 +145,11 @@ class UnifiClient(metaclass=MetaNameFixer):
             else:
                 return response
         else:
-            raise UnifiTransportError("{}: {}".format(resp.status_code, resp.reason))
+            if 'meta' in response:
+                if 'msg' in response['meta']:
+                    raise UnifiTransportError("{}: {}, {}".format(resp.status_code, resp.reason, response['meta']['msg']))
+            else:
+                raise UnifiTransportError("{}: {}".format(resp.status_code, resp.reason))
 
     @property
     def host(self):
@@ -1254,3 +1280,21 @@ class UnifiClient(metaclass=MetaNameFixer):
         path_arg_optional=False,
         method="DELETE",
         )
+    
+    backup = UnifiAPICall(
+        "Make controller backup",
+        "cmd/backup",
+        rest_command='backup',
+        )
+    
+    create_wlan = UnifiAPICall(
+        "Low-level function to set wireless LAN settings",
+        "add/wlanconf",
+        json_body_name="settings",
+        method="PUT",
+        )
+    
+    list_usergroups = UnifiAPICall(
+        "List user groups",
+        "list/usergroup"
+    )
